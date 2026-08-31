@@ -1,19 +1,12 @@
 {
   "name": "client",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "main.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "main": "main.js",
-    "scripts": {
-      "start": "electron .",
-      "build": "electron-builder --win"
-    }
+    "start": "electron .",
+    "dev": "electron .",
+    "build": "electron-builder --win"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
   "dependencies": {
     "electron": "^44.0.0",
     "tail": "^2.2.6"

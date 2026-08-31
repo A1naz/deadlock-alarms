@@ -78,7 +78,7 @@
 
         // Клик по кнопке Telegram
         document.getElementById('btn-telegram').addEventListener('click', () => {
-            const link = `https://t.me/${BOT_USERNAME}?start=${clientSessionId}`;
+            const link = `https://t.me/dl_match_bot?start=${clientSessionId}`;
             window.api.openTelegram(link);
         });
 
@@ -87,7 +87,7 @@
             console.log('Матч найден! Отправляем запрос на сервер...');
             
             // Здесь отправляем POST-запрос на твой сервер (как обсуждали ранее)
-            fetch('https://твой-домен.com/api/notify', {
+            fetch('http://localhost:3000/api/notify', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
