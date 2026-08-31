@@ -9,6 +9,8 @@
         .active { display: flex; }
         button { background: #0088cc; color: white; border: none; padding: 10px 20px; font-size: 16px; border-radius: 5px; cursor: pointer; margin-top: 15px; }
         button:hover { background: #0077b3; }
+        #btn-launch { background: #c45c26; }
+        #btn-launch:hover { background: #a84c1e; }
         .error { color: #ff6b6b; margin-top: 10px; }
     </style>
 </head>
@@ -30,14 +32,51 @@
         <h2>Всё готово!</h2>
         <p>Путь к игре успешно найден.</p>
         <p>Осталось привязать Telegram для получения уведомлений.</p>
-        <h1 id="client-code"></h1> 
+        <h1 id="client-code"></h1>
+        <button id="btn-launch">Запустить Deadlock</button>
         <button id="btn-telegram">Подключить Telegram</button>
+        <button id="btn-test" style="background:#444;">Тест уведомления</button>
+        <p id="status" style="margin-top:20px;color:#9ad;max-width:420px;"></p>
     </div>
 
     <script>
-        const BOT_USERNAME = 'твой_бот_username'; // Без @
         let finalLogPath = '';
-        const clientSessionId = Math.floor(1000 + Math.random() * 9000).toString();
+        const clientSessionId = (() => {
+            let id = localStorage.getItem('clientSessionId');
+            if (!id) {
+                id = Math.floor(1000 + Math.random() * 9000).toString();
+                localStorage.setItem('clientSessionId', id);
+            }
+            return id;
+        })();
+
+        function setStatus(text, warning = false) {
+            const el = document.getElementById('status');
+            el.innerText = text;
+            el.style.color = warning ? '#ff6b6b' : '#9ad';
+        }
+
+        async function notifyServer() {
+            try {
+                const res = await fetch('http://localhost:3000/api/notify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        code: clientSessionId,
+                        event: 'match_found'
+                    })
+                });
+                if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    setStatus(data.error || `Сервер ответил ${res.status}. Привяжи Telegram и проверь, что сервер запущен.`);
+                    return;
+                }
+                setStatus('Уведомление отправлено в Telegram.');
+            } catch (err) {
+                console.error(err);
+                setStatus('Не удалось связаться с сервером. Запусти npm start в папке server.');
+            }
+        }
 
         function showScreen(id) {
             document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
@@ -72,9 +111,28 @@
             showScreen('screen-telegram');
             document.getElementById('client-code').innerText = `Код: ${clientSessionId}`;
             
-            // Начинаем слушать логи игры
-            window.api.startTailing(finalLogPath);
+            window.api.startTailing(finalLogPath, clientSessionId);
+            setStatus('Слушаю логи игры…');
         }
+
+        window.api.onLogStatus((payload) => {
+            setStatus(payload.text, Boolean(payload.warning));
+        });
+
+        document.getElementById('btn-launch').addEventListener('click', async () => {
+            setStatus('Запускаю Deadlock с -condebug…');
+            const result = await window.api.launchDeadlock();
+            if (result.ok) {
+                setStatus('Steam запускает Deadlock с -condebug. Если игра уже открыта — закрой её и нажми кнопку снова.');
+            } else {
+                setStatus(result.error || 'Не удалось запустить Deadlock.', true);
+            }
+        });
+
+        document.getElementById('btn-test').addEventListener('click', () => {
+            setStatus('Отправляю тест…');
+            notifyServer();
+        });
 
         // Клик по кнопке Telegram
         document.getElementById('btn-telegram').addEventListener('click', () => {
@@ -82,19 +140,8 @@
             window.api.openTelegram(link);
         });
 
-        // Слушаем сигнал о найденном матче (чтобы отправить на твой бэкенд)
         window.api.onMatchFound(() => {
-            console.log('Матч найден! Отправляем запрос на сервер...');
-            
-            // Здесь отправляем POST-запрос на твой сервер (как обсуждали ранее)
-            fetch('http://localhost:3000/api/notify', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    code: clientSessionId,
-                    event: 'match_found'
-                })
-            }).catch(err => console.error(err));
+            console.log('Матч найден, main-процесс уже отправил notify');
         });
 
         // Запуск
