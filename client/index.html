@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Deadlock Notifier</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #1e1e24; color: #fff; text-align: center; padding: 40px; }
+        .screen { display: none; flex-direction: column; align-items: center; justify-content: center; height: 100%; }
+        .active { display: flex; }
+        button { background: #0088cc; color: white; border: none; padding: 10px 20px; font-size: 16px; border-radius: 5px; cursor: pointer; margin-top: 15px; }
+        button:hover { background: #0077b3; }
+        .error { color: #ff6b6b; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+    <div id="screen-loading" class="screen active">
+        <h2>Ищем папку с игрой...</h2>
+        <p>Пожалуйста, подождите.</p>
+    </div>
+
+    <div id="screen-manual" class="screen">
+        <h2>Deadlock не найден</h2>
+        <p>Мы не смогли найти игру автоматически. Либо она установлена в нестандартную папку, либо вы забыли прописать параметр запуска <b>-condebug</b> в Steam.</p>
+        <button id="btn-select-folder">Указать папку вручную</button>
+        <p id="folder-error" class="error" style="display:none;">В выбранной папке нет нужных файлов игры!</p>
+    </div>
+
+    <div id="screen-telegram" class="screen">
+        <h2>Всё готово!</h2>
+        <p>Путь к игре успешно найден.</p>
+        <p>Осталось привязать Telegram для получения уведомлений.</p>
+        <h1 id="client-code"></h1> 
+        <button id="btn-telegram">Подключить Telegram</button>
+    </div>
+
+    <script>
+        const BOT_USERNAME = 'твой_бот_username'; // Без @
+        let finalLogPath = '';
+        const clientSessionId = Math.floor(1000 + Math.random() * 9000).toString();
+
+        function showScreen(id) {
+            document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+        }
+
+        async function initApp() {
+            // Пытаемся найти путь автоматически
+            const logPath = await window.api.checkPath();
+            
+            if (logPath) {
+                finalLogPath = logPath;
+                setupTelegramScreen();
+            } else {
+                showScreen('screen-manual');
+            }
+        }
+
+        // Обработка ручного выбора
+        document.getElementById('btn-select-folder').addEventListener('click', async () => {
+            const result = await window.api.selectFolder();
+            if (result === 'error_not_found') {
+                document.getElementById('folder-error').style.display = 'block';
+            } else if (result) {
+                finalLogPath = result;
+                setupTelegramScreen();
+            }
+        });
+
+        // Настройка экрана Telegram
+        function setupTelegramScreen() {
+            showScreen('screen-telegram');
+            document.getElementById('client-code').innerText = `Код: ${clientSessionId}`;
+            
+            // Начинаем слушать логи игры
+            window.api.startTailing(finalLogPath);
+        }
+
+        // Клик по кнопке Telegram
+        document.getElementById('btn-telegram').addEventListener('click', () => {
+            const link = `https://t.me/${BOT_USERNAME}?start=${clientSessionId}`;
+            window.api.openTelegram(link);
+        });
+
+        // Слушаем сигнал о найденном матче (чтобы отправить на твой бэкенд)
+        window.api.onMatchFound(() => {
+            console.log('Матч найден! Отправляем запрос на сервер...');
+            
+            // Здесь отправляем POST-запрос на твой сервер (как обсуждали ранее)
+            fetch('https://твой-домен.com/api/notify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    code: clientSessionId,
+                    event: 'match_found'
+                })
+            }).catch(err => console.error(err));
+        });
+
+        // Запуск
+        initApp();
+    </script>
+</body>
+</html>
